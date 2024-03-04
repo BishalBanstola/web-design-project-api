@@ -4,8 +4,7 @@ async function initAuth0() {
   const auth0 = await createAuth0Client({
     domain: "dev-xvv0pvrqkgxsikp3.us.auth0.com",
     client_id: "Dj9BctQtEdC47bvIrMVQJc2H0kypuc6X",
-    redirect_uri:
-      "file:///C:/Users/benba/OneDrive/Desktop/wddm/web design/web-design-project-api/html/index.html",
+    redirect_uri: window.location.origin,
   });
 
   const isAuthenticated = await auth0.isAuthenticated();
