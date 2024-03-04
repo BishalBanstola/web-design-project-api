@@ -3,60 +3,75 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Auth0 Example</title>
+    <title>Login</title>
+    <!-- Bootstrap CSS -->
+    <link
+      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
   </head>
   <body>
-    <h1>Auth0 Example</h1>
-    <button id="login">Log In</button>
-    <button id="logout">Log Out</button>
-    <div id="profile"></div>
+    <div class="container mt-5">
+      <div class="row justify-content-center">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body">
+              <h5 class="card-title text-center">Login</h5>
+              <p
+                class="text-success text-center"
+                id="loginSuccessMessage"
+                style="display: none"
+              >
+                Login successful!
+              </p>
+              <p
+                class="text-danger text-center"
+                id="loginErrorMessage"
+                style="display: none"
+              >
+                Login failed. Please try again.
+              </p>
+              <button class="btn btn-primary btn-block" id="loginButton">
+                Login
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    <script src="https://cdn.auth0.com/js/auth0-spa-js/1.21.1/auth0-spa-js.production.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
     <script>
-      async function initAuth0() {
-        const auth0 = await createAuth0Client({
-          domain: "dev-xvv0pvrqkgxsikp3.us.auth0.com",
-          client_id: "Dj9BctQtEdC47bvIrMVQJc2H0kypuc6X",
-          redirect_uri: window.location.origin,
-        });
-
-        const isAuthenticated = await auth0.isAuthenticated();
-
-        if (!isAuthenticated) {
-          const query = window.location.search;
-          if (query.includes("code=") && query.includes("state=")) {
-            await auth0.handleRedirectCallback();
-            window.history.replaceState({}, document.title, "/");
-          }
-        }
-
-        const loginButton = document.getElementById("login");
-        loginButton.addEventListener("click", async () => {
-          await auth0.loginWithRedirect();
-        });
-
-        const logoutButton = document.getElementById("logout");
-        logoutButton.addEventListener("click", async () => {
-          await auth0.logout({
-            returnTo: window.location.origin,
+      $(document).ready(function () {
+        // Event listener for login button click
+        $("#loginButton").click(function () {
+          // Send AJAX request to backend for login
+          $.ajax({
+            url: "http://localhost:3000/login", // Change this URL to your backend endpoint
+            method: "GET",
+            success: function (response) {
+              // Show login success message
+              $("#loginSuccessMessage").show();
+              // Hide login error message
+              $("#loginErrorMessage").hide();
+              // Log the user data to console
+              console.log("User data:", response);
+            },
+            error: function (xhr, status, error) {
+              // Show login error message
+              $("#loginErrorMessage").show();
+              // Hide login success message
+              $("#loginSuccessMessage").hide();
+              // Log the error to console
+              console.error("Login error:", error);
+            },
           });
         });
-
-        const profileElement = document.getElementById("profile");
-        const updateProfile = async () => {
-          const user = await auth0.getUser();
-          profileElement.innerText = JSON.stringify(user, null, 2);
-        };
-
-        if (isAuthenticated) {
-          profileElement.style.display = "block";
-          updateProfile();
-        } else {
-          profileElement.style.display = "none";
-        }
-      }
-
-      initAuth0();
+      });
     </script>
   </body>
 </html>
