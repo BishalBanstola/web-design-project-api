@@ -25,6 +25,27 @@ app.get("/", (req, res) => {
     res.status(401).send("User is not authenticated");
   }
 });
+app.get("/login", (req, res) => {
+  // Construct the Auth0 authorization URL
+  const authURL =
+    "https://dev-xvv0pvrqkgxsikp3.us.auth0.com/authorize" +
+    "?client_id=i4ObrgAsWsM7n1JUiOtp8AxTu6qQT7oM" +
+    "&scope=openid%20profile%20email" +
+    "&response_type=id_token" +
+    "&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback" +
+    "&response_mode=form_post" +
+    "&nonce=Yx6bkobkWd9UYx1r3LfnUDy7nn2Yiyzfp8xOQ6LQfO4" +
+    "&state=eyJyZXR1cm5UbyI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCJ9";
+
+  // Redirect the user to the Auth0 authorization URL
+  res.redirect(authURL);
+});
+
+// Handle callback route after successful authentication
+app.post("/callback", (req, res) => {
+  const userData = req.body;
+  res.send(userData);
+});
 
 app.get("/profile", requiresAuth(), (req, res) => {
   res.send(JSON.stringify(req.oidc.user));
