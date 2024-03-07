@@ -22,12 +22,15 @@
           .navbar-nav .nav-link {
             color: white !important; /* Set link text color to white */
           }
+          h2{
+            margin-top: 2rem;
+          }
         </style>
       </head>
       <body>
         <!-- Navigation Bar -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-          <a class="navbar-brand" href="#">Weather Recommendation</a>
+          <a class="navbar-brand" href="index.html">Weather Recommendation</a>
           <div
             class="collapse navbar-collapse justify-content-end"
             id="navbarNav"
@@ -42,11 +45,6 @@
             </ul>
           </div>
         </nav>
-        <div class="jumbotron jumbotron-fluid">
-          <div class="container">
-            <h1 class="display-4">Discover News and Movies</h1>
-          </div>
-        </div>
         <div class="container">
           <div class="row">
             <div class="col">
@@ -58,7 +56,6 @@
           </div>
           <div class="row">
             <div class="col">
-              <h2 class="mb-4">Top News Today</h2>
               <div id="news" class="row">
                 <!-- News cards will be appended here -->
               </div>
@@ -106,7 +103,7 @@
             // Call function to fetch weather data
             fetchWeatherData();
             const feedUrl = "https://feeds.bbci.co.uk/news/rss.xml"; // Replace with the RSS feed URL
-            fetchRSSFeed(feedUrl);
+            // fetchRSSFeed(feedUrl);
           });
 
           function fetchWeatherData() {
@@ -140,7 +137,7 @@
                     movie.genre_ids.includes(genreIdsMap[genre])
                   );
                 });
-                displayMovies(filteredMovies.slice(0, 4));
+                displayMovies(filteredMovies.slice(0, 13));
               },
               error: function (xhr, status, error) {
                 console.error("Error fetching movie recommendations:", error);

@@ -22,12 +22,15 @@
           .navbar-nav .nav-link {
             color: white !important; /* Set link text color to white */
           }
+          h2{
+            margin-top: 2rem;
+          }
         </style>
       </head>
       <body>
         <!-- Navigation Bar -->
         <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-          <a class="navbar-brand" href="#">Weather Recommendation</a>
+          <a class="navbar-brand" href="index.html">Weather Recommendation</a>
           <div
             class="collapse navbar-collapse justify-content-end"
             id="navbarNav"
@@ -42,15 +45,10 @@
             </ul>
           </div>
         </nav>
-        <div class="jumbotron jumbotron-fluid">
-          <div class="container">
-            <h1 class="display-4">Discover News and Movies</h1>
-          </div>
-        </div>
         <div class="container">
           <div class="row">
             <div class="col">
-              <h2 class="mb-4">Top Movies Today</h2>
+              <!-- <h2 class="mb-4">Top Movies Today</h2> -->
               <div id="movies" class="row">
                 <!-- Movies will be appended here -->
               </div>
@@ -58,7 +56,6 @@
           </div>
           <div class="row">
             <div class="col">
-              <h2 class="mb-4">Top News Today</h2>
               <div id="news" class="row">
                 <!-- News cards will be appended here -->
               </div>
@@ -73,102 +70,17 @@
         <!-- Custom JS -->
         <script>
           // Define movie genres based on weather conditions
-          const weatherGenreMap = {
-            Clear: ["Action", "Adventure", "Thriller"],
-            Clouds: ["Drama", "Mystery", "Crime"],
-            Rain: ["Romance", "Drama"],
-            Snow: ["Animation", "Family"],
-          };
+       
           const proxyUrl = "https://cors-anywhere.herokuapp.com/";
-          const genreIdsMap = {
-            Action: 28,
-            Adventure: 12,
-            Animation: 16,
-            Comedy: 35,
-            Crime: 80,
-            Documentary: 99,
-            Drama: 18,
-            Family: 10751,
-            Fantasy: 14,
-            History: 36,
-            Horror: 27,
-            Music: 10402,
-            Mystery: 9648,
-            Romance: 10749,
-            "Science Fiction": 878,
-            "TV Movie": 10770,
-            Thriller: 53,
-            War: 10752,
-            Western: 37,
-          };
-
+       
           $(document).ready(function () {
             // Call function to fetch weather data
-            fetchWeatherData();
+            //fetchWeatherData();
             const feedUrl = "https://feeds.bbci.co.uk/news/rss.xml"; // Replace with the RSS feed URL
-            fetchRSSFeed(feedUrl);
+             fetchRSSFeed(feedUrl);
           });
-
-          function fetchWeatherData() {
-            // Fetch weather data using OpenWeatherMap API
-            const proxyUrl = "https://cors-anywhere.herokuapp.com/";
-            const apiUrl =
-              "https://api.openweathermap.org/data/2.5/weather?q=Toronto&appid=86e75f371588044e06958ed994550298";
-            $.ajax({
-              url: proxyUrl + apiUrl,
-              success: function (data) {
-                // Once weather data is fetched successfully, call function to fetch movie recommendations
-                const weather = data.weather[0].main;
-                console.log(weather);
-                const genres = weatherGenreMap[weather] || ["Action"]; // Default genre is Action
-                fetchMovieRecommendations(genres);
-              },
-              error: function (xhr, status, error) {
-                console.error("Error fetching weather data:", error);
-              },
-            });
-          }
-          // Function to fetch movie recommendations from TMDB API based on genres
-          function fetchMovieRecommendations(genres) {
-            const apiUrl = `https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=1&sort_by=popularity.desc&api_key=316645456cb403d9be8338a0d831a1fb`;
-            $.ajax({
-              url: apiUrl,
-              success: function (data) {
-                const filteredMovies = data.results.filter((movie) => {
-                  // Check if the movie's genre matches any genre for the current weather
-                  return genres.some((genre) =>
-                    movie.genre_ids.includes(genreIdsMap[genre])
-                  );
-                });
-                displayMovies(filteredMovies.slice(0, 4));
-              },
-              error: function (xhr, status, error) {
-                console.error("Error fetching movie recommendations:", error);
-              },
-            });
-          }
-
-          // Function to display movies on the page
-          function displayMovies(movies) {
-            const moviesSection = $("#movies");
-            moviesSection.empty(); // Clear previous content
-
-            movies.forEach((movie) => {
-              const movieCard = `
-      <div class="col-lg-3 col-md-4 col-sm-6 mb-4">
-        <div class="card">
-          <img src="https://image.tmdb.org/t/p/w500${movie.poster_path}" class="card-img-top" alt="${movie.title}">
-          <div class="card-body">
-            <h5 class="card-title">${movie.title}</h5>
-            <p class="card-text">Release Date: ${movie.release_date}</p>
-          </div>
-        </div>
-      </div>
-    `;
-              moviesSection.append(movieCard);
-            });
-          }
-          // Function to fetch and parse RSS feed
+            
+           // Function to fetch and parse RSS feed
           function fetchRSSFeed(feedUrl) {
             $.ajax({
               url: proxyUrl + feedUrl,
@@ -191,7 +103,7 @@
                     };
                     articles.push(article);
                   });
-                displayNews(articles.slice(0, 5));
+                displayNews(articles.slice(0, 16));
               },
               error: function (xhr, status, error) {
                 console.error("Error fetching RSS feed:", error);
