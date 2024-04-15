@@ -1,55 +1,383 @@
-const express = require("express");
-const cors = require("cors");
-const { auth } = require("express-openid-connect");
-
+const express = require('express');
 const app = express();
-const config = {
-  authRequired: false,
-  auth0Logout: true,
-  secret: "a long, randomly-generated string stored in env",
-  baseURL: "http://localhost:3000",
-  clientID: "i4ObrgAsWsM7n1JUiOtp8AxTu6qQT7oM",
-  issuerBaseURL: "https://dev-xvv0pvrqkgxsikp3.us.auth0.com",
-};
-const { requiresAuth } = require("express-openid-connect");
 
-// auth router attaches /login, /logout, and /callback routes to the baseURL
-app.use(cors());
-app.use(auth(config));
+const path = require("path");
+const cors=require('cors');
+const mongoose=require('mongoose');
+const axios=require('axios');
+const multer = require('multer');
+const User = require('./models/user');
+const fs = require('fs'); 
+const bcrypt = require('bcrypt');
+const cookieParser = require('cookie-parser');
+require('express-async-errors');
 
-// req.isAuthenticated is provided from the auth router
-app.get("/", (req, res) => {
-  if (req.oidc.isAuthenticated()) {
-    res.send(JSON.stringify(req.oidc.user));
-  } else {
-    res.status(401).send("User is not authenticated");
-  }
-});
-app.get("/login", (req, res) => {
-  // Construct the Auth0 authorization URL
-  const authURL =
-    "https://dev-xvv0pvrqkgxsikp3.us.auth0.com/authorize" +
-    "?client_id=i4ObrgAsWsM7n1JUiOtp8AxTu6qQT7oM" +
-    "&scope=openid%20profile%20email" +
-    "&response_type=id_token" +
-    "&redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fcallback" +
-    "&response_mode=form_post" +
-    "&nonce=Yx6bkobkWd9UYx1r3LfnUDy7nn2Yiyzfp8xOQ6LQfO4" +
-    "&state=eyJyZXR1cm5UbyI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCJ9";
 
-  // Redirect the user to the Auth0 authorization URL
-  res.redirect(authURL);
+app.use(cors())
+
+const port = process.env.PORT || 5000
+
+app.use('/', express.static(path.join(__dirname, 'public')));
+app.use(express.urlencoded({ extended: true }));
+
+app.use(express.json())
+app.use(cookieParser());
+
+// Multer configuration for handling file uploads
+const upload = multer({ dest: 'uploads/' });
+const storage = multer.memoryStorage(); // Store uploaded files in memory
+
+//Routes
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","index.html"));
+})
+app.get('/movies', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","movies.html"));
+})
+app.get('/news', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","news.html"));
+})
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","login.html"));
+})
+app.get('/register', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","register.html"));
+})
+app.get('/profile', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","profile.html"));
+})
+app.get('/watchlist', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","watchlist.html"));
+})
+
+// Route to handle user registration form submission
+app.post('/registerUser', upload.single('profilePicture'), async (req, res) => {
+    try {
+         // Hash the user's password
+         const hashedPassword = await bcrypt.hash(req.body.password, 10);
+        // Read the uploaded image file
+        const imageBuffer = fs.readFileSync(req.file.path);
+
+        // Create a new user instance with data from the form
+        const newUser = new User({
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            age: req.body.age,
+            occupation: req.body.occupation,
+            dob: req.body.dob,
+            email: req.body.email,
+            password: hashedPassword,
+            profilePicture: imageBuffer // Store image data as Buffer
+        });
+
+        // Save the user to MongoDB
+        await newUser.save();
+        // Delete the uploaded image file after saving it to MongoDB
+        fs.unlinkSync(req.file.path);
+
+        res.status(201).send('User registered successfully!');
+    } catch (err) {
+        console.error('Error registering user:', err);
+        res.status(500).send('Failed to register user');
+    }
 });
 
-// Handle callback route after successful authentication
-app.post("/callback", (req, res) => {
-  const userData = req.body;
-  res.send(userData);
+// Route to handle user login
+app.post('/loginUser', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('Invalid email or password');
+        }
+
+        // Check if password matches
+        if (await bcrypt.compare(password, user.password)) {
+
+            // Set a cookie containing user information
+            res.cookie('userData', user.email);
+            console.log('true password')
+            // Send success response
+            res.status(200).send('Login successful');
+        } else {
+            console.log('false password')
+            // Passwords don't match, display error message
+            res.status(400).send('Invalid email or password');
+        }
+    } catch (err) {
+        console.error('Error logging in user:', err);
+        res.status(500).send('Failed to login user');
+    }
 });
 
-app.get("/profile", requiresAuth(), (req, res) => {
-  res.send(JSON.stringify(req.oidc.user));
+// Route to fetch user profile information
+app.get('/profileInfo', upload.single('profilePicture'),async (req, res) => {
+    try {
+        //Extract email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+
+        // Send user profile information as JSON response
+        res.json(user);
+    } catch (err) {
+        console.error('Error fetching user profile information:', err);
+        res.status(500).send('Failed to fetch user profile information');
+    }
 });
-app.listen(3000, () => {
-  console.log("Server is running on port 3000");
+// Route to update user's profile picture
+app.post('/updateProfilePicture', upload.single('profilePicture'), async (req, res) => {
+    try {
+        // Extract email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+        // Read the uploaded file from disk
+        const fileBuffer = fs.readFileSync(req.file.path);
+
+        // Update user's profile picture with the file buffer
+        user.profilePicture = fileBuffer;
+
+        // Save the updated user object
+        await user.save();
+
+        // Delete the uploaded file from disk
+        fs.unlinkSync(req.file.path);
+
+        res.status(200).send('Profile picture updated successfully');
+    } catch (err) {
+        console.error('Error updating profile picture:', err);
+        res.status(500).send('Failed to update profile picture');
+    }
 });
+
+// Define a route handler for fetching movie recommendations
+app.get('/fetchWeather', async function(req, res) {
+    try {
+      // Fetch weather data using OpenWeatherMap API
+      const apiUrl = "https://api.openweathermap.org/data/2.5/weather?q=Toronto&appid=86e75f371588044e06958ed994550298";
+      const response = await axios.get(apiUrl);
+  
+      // Extract weather information from the response
+      const weather = response.data.weather[0].main;
+  
+      // Send the weather information as a JSON response
+      console.log({weather})
+      res.json({ weather });
+    } catch (error) {
+      console.error("Error fetching weather data:", error);
+      res.status(500).json({ error: 'Failed to fetch weather data' });
+    }
+  });
+  
+  const weatherGenreMap = {
+    Clear: ["Action", "Adventure", "Thriller","Music"],
+    Clouds: ["Drama", "Mystery", "Crime","War","Western"],
+    Rain: ["Romance", "Drama","Comedy","Fantasy","Horror"],
+    Snow: ["Animation", "Family","Comedy","Fantasy","Horror"],
+  };
+  const genreIdsMap = {
+    Action: 28,
+    Adventure: 12,
+    Animation: 16,
+    Comedy: 35,
+    Crime: 80,
+    Documentary: 99,
+    Drama: 18,
+    Family: 10751,
+    Fantasy: 14,
+    History: 36,
+    Horror: 27,
+    Music: 10402,
+    Mystery: 9648,
+    Romance: 10749,
+    "Science Fiction": 878,
+    "TV Movie": 10770,
+    Thriller: 53,
+    War: 10752,
+    Western: 37,
+  };
+app.get('/movieRecommendations', async function(req, res) {
+    try {
+      // Get weather data passed from the previous '/fetchWeather' route
+      const { weather } = req.query;
+  
+      // Define genre mapping based on weather
+      const genres = weatherGenreMap[weather] || ["Action"];
+  
+      // Fetch movie recommendations using genres
+      const apiKey = "316645456cb403d9be8338a0d831a1fb";
+      const apiUrl = `https://api.themoviedb.org/3/discover/movie?include_adult=false&include_video=false&language=en-US&page=1&sort_by=popularity.desc&api_key=${apiKey}`;
+      const response = await axios.get(apiUrl);
+   // Filter movies based on genres
+      const filteredMovies = response.data.results.filter(movie =>
+        genres.some(genre => movie.genre_ids.includes(genreIdsMap[genre]))
+      );
+     
+  
+      // Send the filtered movie recommendations as a JSON response
+      res.json(filteredMovies);
+    } catch (error) {
+      console.error("Error fetching movie recommendations:", error);
+      res.status(500).json({ error: 'Failed to fetch movie recommendations' });
+    }
+  });
+  // Route to get all watchlist movies
+app.get('/movieWatchList', async (req, res) => {
+    try {
+        // Extract user email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+
+        // Fetch additional details for each movie from TMDB API
+        const apiKey = "316645456cb403d9be8338a0d831a1fb";
+        const promises = user.watchlist.map(async (movie) => {
+            const tmdbApiUrl = `https://api.themoviedb.org/3/movie/${movie}?api_key=${apiKey}&language=en-US`;
+            const response = await axios.get(tmdbApiUrl);
+            return response.data;
+        });
+
+        // Wait for all promises to resolve
+        const moviesDetails = await Promise.all(promises);
+
+        res.status(200).json(moviesDetails);
+    } catch (err) {
+        console.error('Error retrieving watchlist movies:', err);
+        res.status(500).send('Failed to retrieve watchlist movies');
+    }
+});
+
+
+  app.get('/fetchNews', async function(req, res) {
+    try {
+      // Fetch news data from the News API
+      const apiKey = "368313000fd9405a8f6d912b63137202";
+      const apiUrl = `https://newsapi.org/v2/top-headlines?country=us&apiKey=${apiKey}`;
+      const response = await axios.get(apiUrl);
+  
+      // Send the news data as a JSON response
+      res.json(response.data);
+    } catch (error) {
+      console.error("Error fetching news data:", error);
+      res.status(500).json({ error: 'Failed to fetch news data' });
+    }
+  });
+  // Route to save movie to watchlist
+app.post('/saveMovie', async (req, res) => {
+    try {
+        // Extract movie ID from request body
+        const { movieId } = req.body;
+
+        // Extract user email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+        // Check if movie already exists in the watchlist
+        if (user.watchlist.includes(movieId)) {
+            return res.status(400).send('Movie already exists in watchlist');
+        }
+
+        // Add movie to watchlist
+        user.watchlist.push(movieId);
+        await user.save();
+
+        res.status(200).send('Movie added to watchlist successfully');
+    } catch (err) {
+        console.error('Error saving movie to watchlist:', err);
+        res.status(500).send('Failed to save movie to watchlist');
+    }
+});
+
+// Route to remove movie from watchlist
+app.post('/removeMovie', async (req, res) => {
+    try {
+        // Extract movie ID from request body
+        const { movieId } = req.body;
+
+        // Extract user email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+    
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+
+        // Check if movie exists in the watchlist
+        const movieIndex = user.watchlist.indexOf(movieId);
+        if (movieIndex === -1) {
+            return res.status(400).send('Movie not found in watchlist');
+        }
+
+        // Remove movie from watchlist
+        user.watchlist.splice(movieIndex, 1);
+        await user.save();
+
+        res.status(200).send('Movie removed from watchlist successfully');
+    } catch (err) {
+        console.error('Error removing movie from watchlist:', err);
+        res.status(500).send('Failed to remove movie from watchlist');
+    }
+});
+
+
+
+
+const start = async () => {
+    try {
+        await mongoose.connect("mongodb+srv://bishalbanstola10:BRgWPfNwjD46YIVU@cluster0.a1i61rr.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0")
+        app.listen(port, () => {
+            console.log(`server is running on port ${port}`)
+        })
+    }
+    catch (error) {
+        console.log(error)
+    }
+}
+
+start()
