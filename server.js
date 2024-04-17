@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const app = express();
 
@@ -11,8 +12,27 @@ const fs = require('fs');
 const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 require('express-async-errors');
+const admin = require('firebase-admin');
+//const serviceAccount = require('./serviceAccountKey.json');
 
+admin.initializeApp({
+    credential: admin.credential.cert({
+        type: "service_account",
+        project_id: process.env.PROJECT_ID,
+        private_key_id: process.env.PRIVATE_KEY_ID,
+        private_key:process.env.PRIVATE_KEY,
+        client_email: process.env.CLIENT_EMAIL,
+        client_id: process.env.CLIENT_ID,
+        auth_uri: process.env.AUTH_URI,
+        token_uri: process.env.TOKEN_URI,
+        auth_provider_x509_cert_url: process.env.AUTH_PROVIDER_X509_CERT_URL,
+        client_x509_cert_url: process.env.CLIENT_X509_CERT_URL,
+        universe_domain: process.env.UNIVERSE_DOMAIN
+    }),
+    storageBucket: 'gs://project-web-design-bb61f.appspot.com'
+});
 
+const bucket = admin.storage().bucket();
 app.use(cors())
 
 const port = process.env.PORT || 5000
@@ -24,8 +44,10 @@ app.use(express.json())
 app.use(cookieParser());
 
 // Multer configuration for handling file uploads
-const upload = multer({ dest: 'uploads/' });
-const storage = multer.memoryStorage(); // Store uploaded files in memory
+//const upload = multer({ dest: 'uploads/' });
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+ // Store uploaded files in memory
 
 //Routes
 app.get('/', (req, res) => {
@@ -49,14 +71,15 @@ app.get('/profile', (req, res) => {
 app.get('/watchlist', (req, res) => {
     res.sendFile(path.join(__dirname, "public","watchlist.html"));
 })
+app.get('/firebaseUpload', (req, res) => {
+    res.sendFile(path.join(__dirname, "public","firebaseupload.html"));
+})
 
 // Route to handle user registration form submission
 app.post('/registerUser', upload.single('profilePicture'), async (req, res) => {
     try {
          // Hash the user's password
          const hashedPassword = await bcrypt.hash(req.body.password, 10);
-        // Read the uploaded image file
-        const imageBuffer = fs.readFileSync(req.file.path);
 
         // Create a new user instance with data from the form
         const newUser = new User({
@@ -67,13 +90,10 @@ app.post('/registerUser', upload.single('profilePicture'), async (req, res) => {
             dob: req.body.dob,
             email: req.body.email,
             password: hashedPassword,
-            profilePicture: imageBuffer // Store image data as Buffer
         });
 
         // Save the user to MongoDB
         await newUser.save();
-        // Delete the uploaded image file after saving it to MongoDB
-        fs.unlinkSync(req.file.path);
 
         res.status(201).send('User registered successfully!');
     } catch (err) {
@@ -137,8 +157,8 @@ app.get('/profileInfo', upload.single('profilePicture'),async (req, res) => {
         res.status(500).send('Failed to fetch user profile information');
     }
 });
-// Route to update user's profile picture
-app.post('/updateProfilePicture', upload.single('profilePicture'), async (req, res) => {
+// Update profile route
+app.put('/updateProfile', async (req, res) => {
     try {
         // Extract email from the userData cookie
         const email = req.cookies.userData;
@@ -146,29 +166,27 @@ app.post('/updateProfilePicture', upload.single('profilePicture'), async (req, r
             return res.status(400).send('User data not found');
         }
 
-        // Find user by email
-        const user = await User.findOne({ email });
+        // Retrieve updated profile information from request body
+        const updatedProfile = {
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            age: req.body.age,
+            occupation: req.body.occupation,
+        };
 
-        // If user not found, display error message
-        if (!user) {
-            return res.status(400).send('User not found');
+        // Find the user by email and update their profile in the database
+        const updatedUser = await User.findOneAndUpdate({ email }, updatedProfile, { new: true });
+
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found' });
         }
-        // Read the uploaded file from disk
-        const fileBuffer = fs.readFileSync(req.file.path);
 
-        // Update user's profile picture with the file buffer
-        user.profilePicture = fileBuffer;
-
-        // Save the updated user object
-        await user.save();
-
-        // Delete the uploaded file from disk
-        fs.unlinkSync(req.file.path);
-
-        res.status(200).send('Profile picture updated successfully');
-    } catch (err) {
-        console.error('Error updating profile picture:', err);
-        res.status(500).send('Failed to update profile picture');
+        // Return success response
+        return res.status(200).json({ message: 'Profile updated successfully', user: updatedUser });
+    } catch (error) {
+        // Handle error
+        console.error('Error updating profile:', error);
+        return res.status(500).json({ message: 'Internal server error' });
     }
 });
 
@@ -362,6 +380,87 @@ app.post('/removeMovie', async (req, res) => {
     } catch (err) {
         console.error('Error removing movie from watchlist:', err);
         res.status(500).send('Failed to remove movie from watchlist');
+    }
+});
+
+
+
+// Endpoint for uploading images
+app.post('/uploadImage', upload.single('image'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).send('No files were uploaded.');
+      }
+      const email = req.cookies.userData;
+      if (!email) {
+        return res.status(400).send('User data not found');
+    }
+    // Find user by email
+    const user = await User.findOne({ email });
+
+    // If user not found, display error message
+    if (!user) {
+        return res.status(400).send('User not found');
+    }
+      const file = req.file;
+    //  const bucket = admin.storage().bucket();
+      const fileUpload = bucket.file(file.originalname);
+  
+      const blobStream = fileUpload.createWriteStream({
+        metadata: {
+          contentType: file.mimetype
+        }
+      });
+  
+      blobStream.on('error', (error) => {
+        console.log(error);
+        res.status(500).send('Error uploading file.');
+      });
+  
+      blobStream.on('finish',async () => {
+        //const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileUpload.name}`;
+       // Generate a signed URL with a limited-time access token
+       const options = {
+        action: 'read',
+        expires: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days expiry time
+      };
+
+      const [url] = await fileUpload.getSignedUrl(options);
+        user.imageUrl.push(url);
+        await user.save(); // Save the updated user document
+
+        res.status(200).send(url);
+      });
+  
+      blobStream.end(file.buffer);
+    } catch (error) {
+      console.log(error);
+      res.status(500).send('Error uploading file.');
+    }
+  });
+  
+// Define route handler for GET /getUserImages
+app.get('/getUserImages', async (req, res) => {
+    try {
+        // Extract user email from the userData cookie
+        const email = req.cookies.userData;
+        if (!email) {
+            return res.status(400).send('User data not found');
+        }
+
+        // Find user by email
+        const user = await User.findOne({ email });
+
+        // If user not found, display error message
+        if (!user) {
+            return res.status(400).send('User not found');
+        }
+
+        // Send the user's image URLs as a response
+        res.json(user.imageUrl);
+    } catch (error) {
+        console.error('Error fetching user images:', error);
+        res.status(500).send('Internal server error.');
     }
 });
 
